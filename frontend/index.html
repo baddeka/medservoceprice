@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>MedServicePrice.kz — сравнение цен на медуслуги в Казахстане</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <div class="wrap">
+      <div class="brand">
+        <div class="logo">M+</div>
+        <div>
+          <h1>MedServicePrice<span style="opacity:.6">.kz</span></h1>
+          <p>Агрегатор цен на анализы, приёмы врачей и диагностику — как Aviasales, но для медицины</p>
+        </div>
+      </div>
+
+      <div class="searchbar">
+        <input id="q" type="text" autocomplete="off"
+               placeholder="Например: общий анализ крови, УЗИ щитовидной железы, приём кардиолога…" />
+        <button id="searchBtn">Найти</button>
+        <div class="ac" id="ac"></div>
+      </div>
+
+      <div class="stats" id="stats"></div>
+    </div>
+  </header>
+
+  <main>
+    <aside class="filters">
+      <h3>Фильтры</h3>
+
+      <div class="field">
+        <label>Город</label>
+        <select id="f-city"><option value="">Все города</option></select>
+      </div>
+
+      <div class="field">
+        <label>Категория</label>
+        <select id="f-category"><option value="">Все категории</option></select>
+      </div>
+
+      <div class="field">
+        <label>Цена, ₸</label>
+        <div class="price-row">
+          <input id="f-pmin" type="number" min="0" placeholder="от" />
+          <input id="f-pmax" type="number" min="0" placeholder="до" />
+        </div>
+      </div>
+
+      <div class="field">
+        <label>Сортировка</label>
+        <select id="f-sort">
+          <option value="price_asc">Сначала дешевле</option>
+          <option value="price_desc">Сначала дороже</option>
+          <option value="date_desc">Сначала свежие</option>
+        </select>
+      </div>
+
+      <div class="field">
+        <label class="checkbox">
+          <input type="checkbox" id="f-stale" />
+          Показывать устаревшие (&gt;30 дней)
+        </label>
+      </div>
+
+      <button class="btn-reset" id="resetBtn">Сбросить фильтры</button>
+
+      <div class="admin-box">
+        <button class="btn-admin" id="parseBtn">⟳ Обновить данные (запуск парсинга)</button>
+        <div class="admin-msg" id="adminMsg">
+          Ручной запуск пайплайна parse → normalize. Эквивалент cron-задачи (ТЗ п.3.1).
+        </div>
+      </div>
+    </aside>
+
+    <section class="results-area">
+      <div class="results-head">
+        <h2>Предложения</h2>
+        <span class="count" id="count"></span>
+      </div>
+      <div id="results"></div>
+    </section>
+  </main>
+
+  <!-- Панель сравнения -->
+  <div class="compare-bar" id="cmpBar">
+    <span id="cmpCount">Выбрано: 0</span>
+    <button class="go" id="cmpGo">Сравнить в таблице</button>
+    <button class="clr" id="cmpClr">Очистить</button>
+  </div>
+
+  <!-- Универсальное модальное окно (карточка клиники / сравнение) -->
+  <div class="modal-back" id="modalBack">
+    <div class="modal" id="modal"></div>
+  </div>
+
+  <footer>
+    MedServicePrice.kz · MVP · Хакатон 2025 · данные публичные, цены указаны с датой обновления
+  </footer>
+
+  <script src="app.js"></script>
+</body>
+</html>

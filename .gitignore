@@ -1,0 +1,26 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# База генерируется при сборке (build: python seed_demo.py) и на старте,
+# поэтому в репозиторий не коммитим бинарь SQLite
+medprice.db
+*.sqlite
+*.sqlite3
+
+# Артефакты пайплайна
+parse_errors.log
+unmatched.csv
+
+# Локальный dev-конфиг превью (содержит абсолютные пути этой машины)
+.claude/
+
+# IDE / OS
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db

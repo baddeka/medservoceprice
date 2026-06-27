@@ -1,0 +1,16 @@
+# Render Blueprint — деплой одним сервисом (API + фронтенд) прямо из GitHub.
+# На render.com: New + → Blueprint → выбрать этот репозиторий → Apply.
+services:
+  - type: web
+    name: medservoceprice
+    runtime: python
+    plan: free
+    # Сборка: ставим зависимости и наполняем БД демо-данными (178 предложений),
+    # чтобы сразу после деплоя страница показывала данные.
+    buildCommand: "pip install -r requirements.txt && python seed_demo.py"
+    # Render передаёт порт в $PORT; биндимся на 0.0.0.0
+    startCommand: "uvicorn backend.main:app --host 0.0.0.0 --port $PORT"
+    envVars:
+      - key: PYTHON_VERSION
+        value: "3.12.7"
+    autoDeploy: true
