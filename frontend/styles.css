@@ -50,8 +50,8 @@ header {
 .topstats .ts b { display: block; font-size: 17px; font-weight: 750; line-height: 1.1; }
 .topstats .ts span { font-size: 11px; opacity: .8; }
 
-.hero { text-align: center; padding: 16px 0 4px; }
-.hero h1 { font-size: 30px; line-height: 1.18; margin: 8px auto 6px; max-width: 720px; font-weight: 760; letter-spacing: -.4px; }
+.hero { text-align: center; padding: 26px 0 8px; }
+.hero h1 { font-size: 30px; line-height: 1.18; margin: 8px auto 30px; max-width: 720px; font-weight: 760; letter-spacing: -.4px; }
 .hero-sub { font-size: 15px; opacity: .9; margin: 0 auto 22px; max-width: 560px; }
 
 .searchbar {
@@ -176,6 +176,23 @@ main { max-width: 1160px; margin: 26px auto 64px; padding: 0 22px; display: grid
 .tag { display: inline-block; font-size: 10.5px; font-weight: 700; padding: 2px 8px; border-radius: 999px; }
 .tag.best { background: var(--green); color: #fff; }
 .tag.stale { background: var(--amber-soft); color: var(--amber); }
+
+.cl-rating { font-size: 13px; font-weight: 700; color: #d98e00; white-space: nowrap; }
+.cl-rating.big { font-size: 18px; }
+.cl-rating .rc, .rc { color: var(--ink-faint); font-weight: 500; font-size: 12.5px; }
+.cl-more { margin-top: 8px; background: none; border: none; color: var(--accent); font: inherit; font-size: 12.8px; font-weight: 650; cursor: pointer; padding: 0; }
+.cl-more:hover { text-decoration: underline; }
+
+.rating-row { margin: 2px 0 8px; display: flex; align-items: baseline; gap: 8px; }
+.block-title { font-size: 15px; font-weight: 700; padding: 0 26px; }
+.block-title.pad { padding-top: 18px; }
+.reviews-block { padding: 16px 26px 4px; }
+.reviews-block .block-title { padding: 0 0 10px; }
+.review { background: var(--bg); border-radius: 12px; padding: 11px 14px; margin-bottom: 9px; }
+.review-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 3px; }
+.review-top b { font-size: 13.5px; }
+.review-stars { color: #f5a623; font-size: 12.5px; letter-spacing: 1px; }
+.review-text { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
 
 /* clinic modal table */
 .clinic-modal-head { position: relative; padding: 24px 26px 18px; border-bottom: 1px solid var(--line); }
