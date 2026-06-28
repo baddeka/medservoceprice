@@ -22,21 +22,11 @@ let activeCategory = "";
 
 // ---------------- init ----------------
 async function init() {
-  await Promise.all([loadStats(), loadCities()]);
+  await loadCities();
   buildChips();
   bindEvents();
   runSearch();
 }
-
-async function loadStats() {
-  try {
-    const s = await fetch(`${API}/stats`).then((r) => r.json());
-    $("topstats").innerHTML =
-      ts(s.total_offers, "цен") + ts(s.clinics, "клиник") +
-      ts(s.cities, "городов") + ts(s.services_with_prices ?? s.services_in_dictionary, "услуг");
-  } catch (e) {}
-}
-const ts = (n, l) => `<div class="ts"><b>${fmt(n)}</b><span>${l}</span></div>`;
 
 async function loadCities() {
   const cities = await fetch(`${API}/cities`).then((r) => r.json()).catch(() => []);
@@ -284,7 +274,6 @@ async function refreshData() {
       : `✓ Готово за ${sec}с. Данные уже актуальны — новых цен нет.`;
     if (res.errors && res.errors.length) m += ` Недоступных источников: ${res.errors.length} (пропущены).`;
     msg.textContent = m;
-    await loadStats();
     runSearch();
   } catch (e) {
     clearInterval(timer);
