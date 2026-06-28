@@ -498,6 +498,7 @@ def stats():
         "clinics": g("SELECT COUNT(DISTINCT clinic_name) FROM listings"),
         "cities": g("SELECT COUNT(DISTINCT city) FROM listings"),
         "services_in_dictionary": g("SELECT COUNT(*) FROM service_dictionary"),
+        "services_with_prices": g("SELECT COUNT(DISTINCT service_id) FROM listings"),
         "total_offers": g("SELECT COUNT(*) FROM listings"),
         "fresh_offers": conn.execute(
             "SELECT COUNT(*) FROM listings WHERE parsed_at >= ?", (cutoff,)

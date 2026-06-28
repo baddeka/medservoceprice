@@ -32,7 +32,7 @@ async function loadStats() {
     const s = await fetch(`${API}/stats`).then((r) => r.json());
     $("topstats").innerHTML =
       ts(s.total_offers, "цен") + ts(s.clinics, "клиник") +
-      ts(s.cities, "городов") + ts(s.services_in_dictionary, "услуг");
+      ts(s.cities, "городов") + ts(s.services_with_prices ?? s.services_in_dictionary, "услуг");
   } catch (e) {}
 }
 const ts = (n, l) => `<div class="ts"><b>${fmt(n)}</b><span>${l}</span></div>`;

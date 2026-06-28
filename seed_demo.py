@@ -40,32 +40,22 @@ CLINICS = {
     "Инвитро Шымкент":  ("Шымкент", "ул. Байтурсынова, 44",       "+7 725 211 11 12", "Пн-Сб 08:00-20:00"),
 }
 
-# (canonical_name, базовая цена) — для каждой услуги генерим разброс по клиникам города
-SERVICES = [
-    ("Общий анализ крови (ОАК)", 2500),
-    ("Общий анализ мочи (ОАМ)", 1800),
-    ("Биохимический анализ крови", 9000),
-    ("Глюкоза крови", 1500),
-    ("Гликированный гемоглобин (HbA1c)", 4500),
-    ("Холестерин общий", 1700),
-    ("Липидный профиль (липидограмма)", 6500),
-    ("ТТГ (тиреотропный гормон)", 3200),
-    ("Витамин D (25-OH)", 9500),
-    ("Ферритин", 4200),
-    ("С-реактивный белок (СРБ)", 3000),
-    ("Коагулограмма", 5500),
-    ("ПСА общий (простатспецифический антиген)", 5000),
-    ("Гепатит B (HBsAg)", 2800),
-    ("Гепатит C (anti-HCV)", 3100),
-    ("УЗИ органов брюшной полости", 8000),
-    ("УЗИ щитовидной железы", 6000),
-    ("ЭКГ (электрокардиография)", 3500),
-    ("Приём терапевта", 7000),
-    ("Приём кардиолога", 9000),
-    ("Приём гинеколога", 8500),
-    ("Приём эндокринолога", 9000),
-    ("Забор крови из вены", 800),
-]
+# Базовая цена услуги вычисляется детерминированно из её названия и категории —
+# так каждая услуга справочника получает реалистичную цену, и демо покрывает
+# ВСЕ позиции справочника (чтобы число услуг с ценами совпадало со справочником).
+import hashlib
+
+PRICE_RANGES = {
+    "лаборатория": (1500, 12000),
+    "приём врача": (6000, 12000),
+    "диагностика": (4000, 16000),
+    "процедура":   (500, 3000),
+}
+
+def base_price(name, category):
+    lo, hi = PRICE_RANGES.get(category, (1500, 9000))
+    h = int(hashlib.sha1(name.encode("utf-8")).hexdigest(), 16)
+    return int(round((lo + h % (hi - lo)) / 50) * 50)
 
 CITY_CLINICS = {}
 for name, (city, *_rest) in CLINICS.items():
@@ -86,54 +76,58 @@ def main():
 
     now = datetime.now()
     inserted, skipped = 0, 0
+    all_clinics = list(CLINICS.keys())
 
-    for canonical, base_price in SERVICES:
-        if canonical not in dict_map:
-            continue
-        sid, category = dict_map[canonical]
-        for city, clinic_names in CITY_CLINICS.items():
-            # не каждая клиника предлагает каждую услугу — реалистичный разброс
-            for clinic in clinic_names:
-                if random.random() < 0.25:
-                    continue
-                # цена ±35% от базовой, округлённая до 50 тг
-                factor = random.uniform(0.65, 1.35)
-                price = int(round(base_price * factor / 50) * 50)
+    def add_offer(clinic, sid, canonical, category, base):
+        nonlocal inserted, skipped
+        factor = random.uniform(0.65, 1.35)
+        price = int(round(base * factor / 50) * 50)
+        if random.random() < 0.08:  # часть записей намеренно «устаревшие» (>30 дн)
+            parsed_at = (now - timedelta(days=random.randint(35, 70))).isoformat()
+        else:
+            parsed_at = (now - timedelta(days=random.randint(0, 6))).isoformat()
+        city_c, address, phone, hours = CLINICS[clinic]
+        h = price_hash(clinic, sid, price)
+        try:
+            conn.execute(
+                """
+                INSERT INTO listings
+                    (clinic_name, city, address, phone, working_hours,
+                     service_id, service_name_raw, category, price_kzt,
+                     source_url, parsed_at, price_hash)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (clinic, city_c, address, phone, hours, sid, canonical,
+                 category, price, "https://example.kz/price", parsed_at, h),
+            )
+            inserted += 1
+            return True
+        except sqlite3.IntegrityError:
+            skipped += 1
+            return False
 
-                # большинство записей свежие; пара — намеренно старше 30 дней,
-                # чтобы показать метку «устарело»
-                if random.random() < 0.08:
-                    parsed_at = (now - timedelta(days=random.randint(35, 70))).isoformat()
-                else:
-                    parsed_at = (now - timedelta(days=random.randint(0, 6))).isoformat()
-
-                city_c, address, phone, hours = CLINICS[clinic]
-                h = price_hash(clinic, sid, price)
-                try:
-                    conn.execute(
-                        """
-                        INSERT INTO listings
-                            (clinic_name, city, address, phone, working_hours,
-                             service_id, service_name_raw, category, price_kzt,
-                             source_url, parsed_at, price_hash)
-                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-                        """,
-                        (clinic, city_c, address, phone, hours, sid, canonical,
-                         category, price, "https://example.kz/price", parsed_at, h),
-                    )
-                    inserted += 1
-                except sqlite3.IntegrityError:
-                    skipped += 1
+    # Покрываем ВСЕ услуги справочника, чтобы каталог был полным.
+    for canonical, (sid, category) in dict_map.items():
+        base = base_price(canonical, category)
+        chosen = [c for c in all_clinics if random.random() >= 0.45]
+        # гарантируем минимум 3 клиники на услугу (для сравнения цен)
+        while len(chosen) < 3:
+            c = random.choice(all_clinics)
+            if c not in chosen:
+                chosen.append(c)
+        for clinic in chosen:
+            add_offer(clinic, sid, canonical, category, base)
 
     conn.commit()
     total = conn.execute("SELECT COUNT(*) FROM listings").fetchone()[0]
     cities = conn.execute("SELECT COUNT(DISTINCT city) FROM listings").fetchone()[0]
     clinics = conn.execute("SELECT COUNT(DISTINCT clinic_name) FROM listings").fetchone()[0]
+    services = conn.execute("SELECT COUNT(DISTINCT service_id) FROM listings").fetchone()[0]
     conn.close()
 
     print("=== seed_demo.py завершён ===")
     print(f"  вставлено: {inserted}, пропущено (дубли): {skipped}")
-    print(f"  всего в listings: {total} | клиник: {clinics} | городов: {cities}")
+    print(f"  listings: {total} | клиник: {clinics} | городов: {cities} | услуг с ценами: {services}")
 
 
 if __name__ == "__main__":
