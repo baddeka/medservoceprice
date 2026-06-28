@@ -8,10 +8,29 @@
 </head>
 <body>
   <header>
+    <div class="bg-float" aria-hidden="true">
+      <span class="blob b1"></span>
+      <span class="blob b2"></span>
+      <span class="blob b3"></span>
+      <span class="blob b4"></span>
+      <span class="gly g1">✚</span>
+      <span class="gly g2">🧬</span>
+      <span class="gly g3">💊</span>
+      <span class="gly g4">🩺</span>
+    </div>
     <div class="wrap">
       <nav class="topbar">
         <div class="brand">
-          <div class="logo">＋</div>
+          <svg class="logo" viewBox="0 0 44 44" role="img" aria-label="MedServicePrice логотип">
+            <defs>
+              <linearGradient id="logoG" x1="0" y1="0" x2="1" y2="1">
+                <stop offset="0" stop-color="#22d3c5"/><stop offset="1" stop-color="#3b82f6"/>
+              </linearGradient>
+            </defs>
+            <rect width="44" height="44" rx="13" fill="url(#logoG)"/>
+            <rect width="44" height="19" rx="13" fill="#ffffff" opacity="0.16"/>
+            <path d="M18.3 10h7.4v7.9h7.9v7.4h-7.9V33h-7.4v-7.7H10.4v-7.4h7.9z" fill="#fff"/>
+          </svg>
           <div class="brand-txt">
             <span class="brand-name">MedServicePrice<span class="dot">.kz</span></span>
             <span class="brand-sub">сравнение цен на медицинские услуги</span>

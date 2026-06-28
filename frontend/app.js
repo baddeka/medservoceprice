@@ -10,13 +10,14 @@ const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("ru-RU"));
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
   ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-const CATS = {
-  "лаборатория": { ic: "🧪", cls: "ic-lab" },
-  "приём врача": { ic: "🩺", cls: "ic-doc" },
-  "диагностика": { ic: "🩻", cls: "ic-diag" },
-  "процедура":   { ic: "💉", cls: "ic-proc" },
+// 3D-иконки услуг: глянцевый градиентный «сквиркл» + белый символ.
+const ICO = {
+  "лаборатория": { emoji: "🧪", svg: `<svg viewBox="0 0 48 48"><defs><linearGradient id="gLab" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#34e0d0"/><stop offset="1" stop-color="#0e9aa7"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="14" fill="url(#gLab)"/><ellipse cx="24" cy="13" rx="17" ry="8" fill="#fff" opacity=".18"/><path d="M24 12c0 0 9 9.5 9 16.5a9 9 0 1 1-18 0C15 21.5 24 12 24 12z" fill="#fff"/><circle cx="20.5" cy="29" r="2.6" fill="#0e9aa7" opacity=".22"/></svg>` },
+  "приём врача": { emoji: "🩺", svg: `<svg viewBox="0 0 48 48"><defs><linearGradient id="gDoc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#5aa0ff"/><stop offset="1" stop-color="#2563eb"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="14" fill="url(#gDoc)"/><ellipse cx="24" cy="13" rx="17" ry="8" fill="#fff" opacity=".18"/><circle cx="24" cy="19" r="6.2" fill="#fff"/><path d="M13 35c0-6 5-9.5 11-9.5S35 29 35 35z" fill="#fff"/></svg>` },
+  "диагностика": { emoji: "🩻", svg: `<svg viewBox="0 0 48 48"><defs><linearGradient id="gDiag" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#b18bff"/><stop offset="1" stop-color="#7c3aed"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="14" fill="url(#gDiag)"/><ellipse cx="24" cy="13" rx="17" ry="8" fill="#fff" opacity=".18"/><rect x="11" y="14" width="26" height="17" rx="3" fill="#fff"/><rect x="20" y="31" width="8" height="3.4" rx="1.5" fill="#fff"/><polyline points="14,23 18,23 21,18 24,28 27,23 34,23" fill="none" stroke="#7c3aed" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>` },
+  "процедура":   { emoji: "💉", svg: `<svg viewBox="0 0 48 48"><defs><linearGradient id="gProc" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#ff8aa6"/><stop offset="1" stop-color="#e11d48"/></linearGradient></defs><rect x="2" y="2" width="44" height="44" rx="14" fill="url(#gProc)"/><ellipse cx="24" cy="13" rx="17" ry="8" fill="#fff" opacity=".18"/><g fill="#fff"><rect x="20" y="15" width="8" height="17" rx="2"/><rect x="17.5" y="11" width="13" height="3.2" rx="1.6"/><rect x="23" y="7" width="2" height="5"/><rect x="23" y="32" width="2" height="8"/></g><line x1="22" y1="20" x2="26" y2="20" stroke="#e11d48" stroke-width="1.6"/><line x1="22" y1="24" x2="26" y2="24" stroke="#e11d48" stroke-width="1.6"/></svg>` },
 };
-const catIcon = (c) => (CATS[c] || { ic: "🩺", cls: "ic-doc" });
+const catIcon = (c) => (ICO[c] || ICO["приём врача"]);
 let activeCategory = "";
 
 // ---------------- init ----------------
@@ -140,7 +141,7 @@ function svcCard(s) {
     + (s.city_count > 1 ? ` · ${s.city_count} ${plural(s.city_count, "город", "города", "городов")}` : "");
   return `
     <div class="svc-card" data-id="${s.service_id}">
-      <div class="svc-ic ${ic.cls}">${ic.ic}</div>
+      <div class="svc-ic">${ic.svg}</div>
       <div class="svc-body">
         <div class="svc-name">${esc(s.canonical_name)}</div>
         <div class="svc-meta">
@@ -172,7 +173,7 @@ async function openService(id) {
     openModal(`
       <button class="modal-close" onclick="closeModal()">✕</button>
       <div class="svc-detail-head">
-        <div class="cat">${ic.ic} ${esc(d.category || "услуга")}</div>
+        <div class="cat">${ic.emoji} ${esc(d.category || "услуга")}</div>
         <h2>${esc(d.canonical_name)}</h2>
         <div class="price-line">${d.clinic_count
           ? `${d.clinic_count} ${plural(d.clinic_count, "клиника", "клиники", "клиник")} · цена <b>от ${fmt(d.min_price)} ₸</b> до ${fmt(d.max_price)} ₸`
@@ -264,22 +265,32 @@ async function openClinic(encoded) {
 
 // ---------------- обновление данных ----------------
 async function refreshData() {
-  const btn = $("parseBtn"), prev = btn.textContent;
-  btn.disabled = true; btn.textContent = "↻ Обновляем…";
-  $("adminMsg").textContent = "Проверяем источники и подтягиваем свежие цены… (до минуты)";
+  const btn = $("parseBtn"), prev = btn.textContent, msg = $("adminMsg");
+  btn.disabled = true;
+  btn.classList.add("loading");
+  // живой таймер — видно, что процесс идёт (опрос живых сайтов ~1–2 мин)
+  let sec = 0;
+  btn.textContent = "↻ Обновляем… 0с";
+  const timer = setInterval(() => {
+    sec += 1;
+    btn.textContent = `↻ Обновляем… ${sec}с`;
+  }, 1000);
+  msg.textContent = "Опрашиваем сайты клиник и подтягиваем свежие цены. Это занимает 1–2 минуты — не закрывайте страницу.";
   try {
     const res = await fetch(`${API}/admin/trigger-parse`, { method: "POST" }).then((r) => r.json());
-    let msg = res.new_records > 0
-      ? `Готово. Добавлено свежих цен: ${res.new_records}.`
-      : "Готово. Новых цен нет — данные уже актуальны.";
-    if (res.errors && res.errors.length) msg += `\nНедоступные источники: ${res.errors.length} (пропущены).`;
-    $("adminMsg").textContent = msg;
+    clearInterval(timer);
+    let m = res.new_records > 0
+      ? `✓ Готово за ${sec}с. Добавлено свежих цен: ${res.new_records}.`
+      : `✓ Готово за ${sec}с. Данные уже актуальны — новых цен нет.`;
+    if (res.errors && res.errors.length) m += ` Недоступных источников: ${res.errors.length} (пропущены).`;
+    msg.textContent = m;
     await loadStats();
     runSearch();
   } catch (e) {
-    $("adminMsg").textContent = "Не удалось обновить данные.";
+    clearInterval(timer);
+    msg.textContent = "Не удалось обновить данные.";
   } finally {
-    btn.disabled = false; btn.textContent = prev;
+    btn.disabled = false; btn.textContent = prev; btn.classList.remove("loading");
   }
 }
 
