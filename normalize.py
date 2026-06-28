@@ -1,20 +1,15 @@
 """
-normalize.py — Дорожка 1, шаг 2: превращает сырые raw_listings в чистые listings.
+normalize.py — превращает сырые raw_listings в чистые listings.
 
 Запуск:  python normalize.py   (сразу после parse.py)
 
-Что делает (строго по плану, раздел 2-3 и Дорожка 1):
-  1. Заполняет service_dictionary из service_dictionary.json (≥50 позиций — ТЗ п.6).
+Что делает:
+  1. Заполняет service_dictionary из service_dictionary.json.
   2. Читает raw_listings, чистит цену ("1 880 ₸" -> 1880).
-  3. Fuzzy-match service_name_raw -> справочник (rapidfuzz, порог ~80%).
+  3. Сопоставляет название услуги со справочником (rapidfuzz, порог ~80%).
   4. Сматченное пишет в listings с дедупликацией по price_hash
      (clinic_name, service_id, price_kzt) — повторный запуск не плодит дубли.
-  5. Несматченное складывает в unmatched.csv (без UI — как договорились).
-
-ПРИМЕЧАНИЕ ПО КОМАНДЕ: это файл Дорожки 1 (парсинг/нормализация). Он написан
-совместимым с контрактом схемы из плана, чтобы backend (/admin/trigger-parse)
-работал end-to-end. Анна может смержить со своей версией справочника синонимов —
-формат таблиц менять не нужно.
+  5. Несматченное складывает в unmatched.csv.
 """
 
 import os
