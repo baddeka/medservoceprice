@@ -1,5 +1,10 @@
-// MedServicePrice.kz — фронтенд (vanilla JS, без сборки). Тот же origin, что и API.
-const API = "";
+// MedServicePrice.kz — фронтенд (vanilla JS, без сборки).
+// По умолчанию API на том же origin (сайт открыт через сервер). Но если файл
+// открыли напрямую с диска (file://) — берём задеплоенный backend, чтобы данные
+// всё равно подгружались и страница не была пустой.
+const API = (location.protocol === "file:" || !location.host)
+  ? "https://medservoceprice.onrender.com"
+  : "";
 const $ = (id) => document.getElementById(id);
 const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("ru-RU"));
 const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
@@ -111,7 +116,10 @@ async function runSearch() {
     renderServices(data.results);
     $("count").textContent = data.count ? `${data.count} услуг` : "";
   } catch (e) {
-    $("results").innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось загрузить данные. Запущен ли сервер?</div>`;
+    $("results").innerHTML = `<div class="empty"><div class="big">⚠️</div>
+      Не удалось загрузить данные.<br>
+      Откройте сайт по ссылке <a href="https://medservoceprice.onrender.com">medservoceprice.onrender.com</a>,
+      а не файлом с диска.</div>`;
   }
 }
 
