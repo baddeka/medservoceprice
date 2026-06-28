@@ -193,6 +193,8 @@ main { max-width: 1160px; margin: 26px auto 64px; padding: 0 22px; display: grid
 .review-top b { font-size: 13.5px; }
 .review-stars { color: #f5a623; font-size: 12.5px; letter-spacing: 1px; }
 .review-text { font-size: 13px; color: var(--ink-soft); line-height: 1.5; }
+.show-all-reviews { margin-top: 4px; background: #fff; border: 1px solid var(--line); color: var(--accent); font-weight: 650; font-size: 13px; padding: 9px 14px; border-radius: 10px; cursor: pointer; width: 100%; }
+.show-all-reviews:hover { background: var(--accent-soft); border-color: var(--accent); }
 
 /* clinic modal table */
 .clinic-modal-head { position: relative; padding: 24px 26px 18px; border-bottom: 1px solid var(--line); }

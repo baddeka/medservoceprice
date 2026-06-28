@@ -232,11 +232,18 @@ async function openClinic(encoded) {
     const ratingLine = c.rating != null
       ? `<span class="cl-rating big">★ ${c.rating}</span> <span class="rc">${fmt(c.reviews_count)} ${plural(c.reviews_count, "отзыв", "отзыва", "отзывов")}</span>`
       : "";
-    const reviews = (c.reviews || []).map((r) => `
+    const reviewHtml = (r) => `
       <div class="review">
         <div class="review-top"><b>${esc(r.author)}</b><span class="review-stars">${"★".repeat(r.stars)}${"☆".repeat(5 - r.stars)}</span></div>
         <div class="review-text">${esc(r.text)}</div>
-      </div>`).join("");
+      </div>`;
+    const all = c.reviews || [];
+    const firstR = all.slice(0, 3).map(reviewHtml).join("");
+    const restR = all.slice(3).map(reviewHtml).join("");
+    const reviews = all.length ? (firstR + (restR
+      ? `<div id="moreReviews" style="display:none">${restR}</div>
+         <button class="show-all-reviews" id="showAllBtn" data-total="${all.length}" onclick="toggleReviews()">Показать все отзывы (${all.length})</button>`
+      : "")) : "";
     openModal(`
       <button class="modal-close" onclick="closeModal()">✕</button>
       <div class="clinic-modal-head">
@@ -291,5 +298,13 @@ function plural(n, one, few, many) {
   if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
   return many;
 }
+function toggleReviews() {
+  const m = $("moreReviews"), b = $("showAllBtn");
+  if (!m || !b) return;
+  const open = m.style.display === "none";
+  m.style.display = open ? "block" : "none";
+  b.textContent = open ? "Свернуть отзывы" : `Показать все отзывы (${b.dataset.total})`;
+}
 window.closeModal = closeModal;
+window.toggleReviews = toggleReviews;
 init();
