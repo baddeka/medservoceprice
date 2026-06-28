@@ -56,7 +56,11 @@ def init_schema():
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             canonical_name TEXT UNIQUE NOT NULL,
             synonyms TEXT,            -- JSON-список синонимов
-            category TEXT
+            category TEXT,
+            description TEXT,         -- что это / что показывает услуга
+            preparation TEXT,         -- как подготовиться
+            biomaterial TEXT,         -- биоматериал (для анализов)
+            turnaround TEXT           -- срок выполнения
         )
         """
     )

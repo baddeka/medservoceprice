@@ -76,7 +76,11 @@ def ensure_schema(conn):
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             canonical_name TEXT UNIQUE NOT NULL,
             synonyms TEXT,
-            category TEXT
+            category TEXT,
+            description TEXT,
+            preparation TEXT,
+            biomaterial TEXT,
+            turnaround TEXT
         );
         CREATE TABLE IF NOT EXISTS listings (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -100,7 +104,9 @@ def ensure_schema(conn):
 
 
 def seed_dictionary(conn):
-    """Заполняем справочник из JSON. INSERT OR IGNORE — идемпотентно."""
+    """Заполняем справочник из JSON. Upsert: создаём запись и обновляем метаданные
+    (описание/подготовка/биоматериал/срок), чтобы повторный запуск подтягивал
+    свежий контент из service_dictionary.json. Идемпотентно."""
     if not os.path.exists(DICT_PATH):
         print(f"[normalize] нет {DICT_PATH} — справочник не заполнен")
         return 0
@@ -109,8 +115,21 @@ def seed_dictionary(conn):
     n = 0
     for it in items:
         conn.execute(
-            "INSERT OR IGNORE INTO service_dictionary (canonical_name, synonyms, category) VALUES (?, ?, ?)",
-            (it["canonical_name"], json.dumps(it.get("synonyms", []), ensure_ascii=False), it.get("category")),
+            "INSERT OR IGNORE INTO service_dictionary (canonical_name) VALUES (?)",
+            (it["canonical_name"],),
+        )
+        conn.execute(
+            """
+            UPDATE service_dictionary
+            SET synonyms = ?, category = ?, description = ?,
+                preparation = ?, biomaterial = ?, turnaround = ?
+            WHERE canonical_name = ?
+            """,
+            (
+                json.dumps(it.get("synonyms", []), ensure_ascii=False),
+                it.get("category"), it.get("description"), it.get("preparation"),
+                it.get("biomaterial"), it.get("turnaround"), it["canonical_name"],
+            ),
         )
         n += 1
     conn.commit()

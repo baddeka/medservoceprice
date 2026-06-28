@@ -9,96 +9,87 @@
 <body>
   <header>
     <div class="wrap">
-      <div class="brand">
-        <div class="logo">M+</div>
-        <div>
-          <h1>MedServicePrice<span style="opacity:.6">.kz</span></h1>
-          <p>Агрегатор цен на анализы, приёмы врачей и диагностику — как Aviasales, но для медицины</p>
+      <nav class="topbar">
+        <div class="brand">
+          <div class="logo">＋</div>
+          <div class="brand-txt">
+            <span class="brand-name">MedServicePrice<span class="dot">.kz</span></span>
+            <span class="brand-sub">сравнение цен на медицинские услуги</span>
+          </div>
         </div>
-      </div>
+        <div class="topstats" id="topstats"></div>
+      </nav>
 
-      <div class="searchbar">
-        <input id="q" type="text" autocomplete="off"
-               placeholder="Например: общий анализ крови, УЗИ щитовидной железы, приём кардиолога…" />
-        <button id="searchBtn">Найти</button>
-        <div class="ac" id="ac"></div>
-      </div>
+      <div class="hero">
+        <h1>Найдите, где дешевле сдать анализ или попасть к врачу</h1>
+        <p class="hero-sub">Сравниваем цены клиник и лабораторий Казахстана — как Aviasales, но для медицины</p>
 
-      <div class="stats" id="stats"></div>
+        <div class="searchbar">
+          <span class="search-ico">🔍</span>
+          <input id="q" type="text" autocomplete="off"
+                 placeholder="Анализ, услуга или врач — например «общий анализ крови»" />
+          <button id="searchBtn">Найти</button>
+          <div class="ac" id="ac"></div>
+        </div>
+
+        <div class="chips" id="chips"></div>
+      </div>
     </div>
   </header>
 
   <main>
     <aside class="filters">
-      <h3>Фильтры</h3>
-
-      <div class="field">
-        <label>Город</label>
-        <select id="f-city"><option value="">Все города</option></select>
-      </div>
-
-      <div class="field">
-        <label>Категория</label>
-        <select id="f-category"><option value="">Все категории</option></select>
-      </div>
-
-      <div class="field">
-        <label>Цена, ₸</label>
-        <div class="price-row">
-          <input id="f-pmin" type="number" min="0" placeholder="от" />
-          <input id="f-pmax" type="number" min="0" placeholder="до" />
+      <div class="filters-card">
+        <h3>Фильтры</h3>
+        <div class="field">
+          <label>Город</label>
+          <select id="f-city"><option value="">Все города</option></select>
         </div>
-      </div>
-
-      <div class="field">
-        <label>Сортировка</label>
-        <select id="f-sort">
-          <option value="price_asc">Сначала дешевле</option>
-          <option value="price_desc">Сначала дороже</option>
-          <option value="date_desc">Сначала свежие</option>
-        </select>
-      </div>
-
-      <div class="field">
+        <div class="field">
+          <label>Цена, ₸</label>
+          <div class="price-row">
+            <input id="f-pmin" type="number" min="0" placeholder="от" />
+            <input id="f-pmax" type="number" min="0" placeholder="до" />
+          </div>
+        </div>
+        <div class="field">
+          <label>Сортировка</label>
+          <select id="f-sort">
+            <option value="price_asc">Сначала дешевле</option>
+            <option value="price_desc">Сначала дороже</option>
+            <option value="popular">Больше клиник</option>
+            <option value="name">По названию</option>
+          </select>
+        </div>
         <label class="checkbox">
-          <input type="checkbox" id="f-stale" />
-          Показывать устаревшие (&gt;30 дней)
+          <input type="checkbox" id="f-stale" /> Показывать устаревшие (&gt;30 дней)
         </label>
+        <button class="btn-reset" id="resetBtn">Сбросить</button>
       </div>
 
-      <button class="btn-reset" id="resetBtn">Сбросить фильтры</button>
-
-      <div class="admin-box">
-        <button class="btn-admin" id="parseBtn">⟳ Обновить данные (запуск парсинга)</button>
-        <div class="admin-msg" id="adminMsg">
-          Ручной запуск пайплайна parse → normalize. Эквивалент cron-задачи (ТЗ п.3.1).
-        </div>
+      <div class="filters-card admin">
+        <button class="btn-admin" id="parseBtn">↻ Обновить актуальность данных</button>
+        <div class="admin-msg" id="adminMsg">Проверяет источники и подтягивает свежие цены.</div>
       </div>
     </aside>
 
     <section class="results-area">
       <div class="results-head">
-        <h2>Предложения</h2>
+        <h2 id="resultsTitle">Популярные услуги</h2>
         <span class="count" id="count"></span>
       </div>
       <div id="results"></div>
     </section>
   </main>
 
-  <!-- Панель сравнения -->
-  <div class="compare-bar" id="cmpBar">
-    <span id="cmpCount">Выбрано: 0</span>
-    <button class="go" id="cmpGo">Сравнить в таблице</button>
-    <button class="clr" id="cmpClr">Очистить</button>
-  </div>
-
-  <!-- Универсальное модальное окно (карточка клиники / сравнение) -->
   <div class="modal-back" id="modalBack">
     <div class="modal" id="modal"></div>
   </div>
 
   <footer>
-    MedServicePrice.kz · MVP · Хакатон 2025 · данные публичные, цены указаны с датой обновления
+    <div class="wrap">
+      MedServicePrice.kz · агрегатор публичных цен · у каждой цены указана дата обновления · Хакатон 2025
+    </div>
   </footer>
 
   <script src="app.js"></script>

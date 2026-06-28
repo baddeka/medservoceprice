@@ -1,13 +1,23 @@
 // MedServicePrice.kz — фронтенд (vanilla JS, без сборки). Тот же origin, что и API.
-const API = ""; // пусто = тот же хост (FastAPI отдаёт и статику, и API)
-
+const API = "";
 const $ = (id) => document.getElementById(id);
-const fmt = (n) => (n == null ? "—" : n.toLocaleString("ru-RU"));
-const compare = new Map(); // id -> offer
+const fmt = (n) => (n == null ? "—" : Number(n).toLocaleString("ru-RU"));
+const esc = (s) => String(s == null ? "" : s).replace(/[&<>"]/g, (c) =>
+  ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 
-// ---------- инициализация ----------
+const CATS = {
+  "лаборатория": { ic: "🧪", cls: "ic-lab" },
+  "приём врача": { ic: "🩺", cls: "ic-doc" },
+  "диагностика": { ic: "🩻", cls: "ic-diag" },
+  "процедура":   { ic: "💉", cls: "ic-proc" },
+};
+const catIcon = (c) => (CATS[c] || { ic: "🩺", cls: "ic-doc" });
+let activeCategory = "";
+
+// ---------------- init ----------------
 async function init() {
-  await Promise.all([loadStats(), loadFilters()]);
+  await Promise.all([loadStats(), loadCities()]);
+  buildChips();
   bindEvents();
   runSearch();
 }
@@ -15,237 +25,246 @@ async function init() {
 async function loadStats() {
   try {
     const s = await fetch(`${API}/stats`).then((r) => r.json());
-    $("stats").innerHTML = `
-      ${statBox(s.total_offers, "предложений")}
-      ${statBox(s.clinics, "клиник")}
-      ${statBox(s.cities, "городов")}
-      ${statBox(s.services_in_dictionary, "услуг в справочнике")}
-      ${statBox(s.sources, "источников")}
-    `;
-  } catch (e) { /* база ещё пустая — не страшно */ }
+    $("topstats").innerHTML =
+      ts(s.total_offers, "цен") + ts(s.clinics, "клиник") +
+      ts(s.cities, "городов") + ts(s.services_in_dictionary, "услуг");
+  } catch (e) {}
 }
-const statBox = (num, lbl) =>
-  `<div class="stat"><div class="num">${fmt(num)}</div><div class="lbl">${lbl}</div></div>`;
+const ts = (n, l) => `<div class="ts"><b>${fmt(n)}</b><span>${l}</span></div>`;
 
-async function loadFilters() {
-  const [cities, cats] = await Promise.all([
-    fetch(`${API}/cities`).then((r) => r.json()).catch(() => []),
-    fetch(`${API}/categories`).then((r) => r.json()).catch(() => []),
-  ]);
-  cities.forEach((c) => $("f-city").insertAdjacentHTML("beforeend", `<option>${c}</option>`));
-  cats.forEach((c) => $("f-category").insertAdjacentHTML("beforeend", `<option>${c}</option>`));
+async function loadCities() {
+  const cities = await fetch(`${API}/cities`).then((r) => r.json()).catch(() => []);
+  cities.forEach((c) => $("f-city").insertAdjacentHTML("beforeend", `<option>${esc(c)}</option>`));
 }
 
-// ---------- события ----------
+function buildChips() {
+  const chips = [["", "Все услуги"], ["лаборатория", "🧪 Анализы"], ["приём врача", "🩺 Врачи"],
+                 ["диагностика", "🩻 Диагностика"], ["процедура", "💉 Процедуры"]];
+  $("chips").innerHTML = chips.map(([v, t]) =>
+    `<div class="chip ${v === activeCategory ? "active" : ""}" data-cat="${v}">${t}</div>`).join("");
+  $("chips").querySelectorAll(".chip").forEach((el) => {
+    el.onclick = () => {
+      activeCategory = el.dataset.cat;
+      buildChips();
+      runSearch();
+    };
+  });
+}
+
+// ---------------- events ----------------
 function bindEvents() {
-  $("searchBtn").onclick = runSearch;
-  $("q").addEventListener("keydown", (e) => {
-    if (e.key === "Enter") { hideAc(); runSearch(); }
-  });
-  $("q").addEventListener("input", debounce(autocomplete, 180));
-  document.addEventListener("click", (e) => {
-    if (!e.target.closest(".searchbar")) hideAc();
-  });
-  ["f-city", "f-category", "f-sort", "f-stale"].forEach((id) => ($(id).onchange = runSearch));
-  ["f-pmin", "f-pmax"].forEach((id) =>
-    $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); }));
+  $("searchBtn").onclick = () => { hideAc(); runSearch(); };
+  $("q").addEventListener("input", debounce(autocomplete, 170));
+  $("q").addEventListener("keydown", acKeyNav);
+  document.addEventListener("click", (e) => { if (!e.target.closest(".searchbar")) hideAc(); });
+  ["f-city", "f-sort", "f-stale"].forEach((id) => ($(id).onchange = runSearch));
+  ["f-pmin", "f-pmax"].forEach((id) => $(id).addEventListener("keydown", (e) => { if (e.key === "Enter") runSearch(); }));
   $("resetBtn").onclick = resetFilters;
-  $("parseBtn").onclick = triggerParse;
-  $("cmpGo").onclick = showCompare;
-  $("cmpClr").onclick = clearCompare;
+  $("parseBtn").onclick = refreshData;
   $("modalBack").onclick = (e) => { if (e.target.id === "modalBack") closeModal(); };
+  document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeModal(); });
 }
 
-// ---------- автодополнение ----------
-let acIndex = -1, acItems = [];
+// ---------------- autocomplete ----------------
+let acItems = [], acIndex = -1;
 async function autocomplete() {
   const q = $("q").value.trim();
   if (q.length < 2) return hideAc();
-  acItems = await fetch(`${API}/services/autocomplete?q=${encodeURIComponent(q)}`)
-    .then((r) => r.json()).catch(() => []);
+  acItems = await fetch(`${API}/services/autocomplete?q=${encodeURIComponent(q)}`).then((r) => r.json()).catch(() => []);
   if (!acItems.length) return hideAc();
   acIndex = -1;
-  $("ac").innerHTML = acItems
-    .map((s, i) => `<div class="ac-item" data-i="${i}">${s}</div>`).join("");
+  $("ac").innerHTML = acItems.map((s, i) =>
+    `<div class="ac-item" data-i="${i}"><span class="ac-ic">🔍</span>${esc(s)}</div>`).join("");
   $("ac").classList.add("show");
-  $("ac").querySelectorAll(".ac-item").forEach((el) => {
-    el.onclick = () => { $("q").value = acItems[el.dataset.i]; hideAc(); runSearch(); };
-  });
+  $("ac").querySelectorAll(".ac-item").forEach((el) =>
+    (el.onclick = () => { $("q").value = acItems[el.dataset.i]; hideAc(); runSearch(); }));
 }
-$("q") && $("q").addEventListener("keydown", (e) => {
+function acKeyNav(e) {
+  if (e.key === "Enter") { hideAc(); runSearch(); return; }
   if (!$("ac").classList.contains("show")) return;
   const items = $("ac").querySelectorAll(".ac-item");
-  if (e.key === "ArrowDown") { acIndex = Math.min(acIndex + 1, items.length - 1); e.preventDefault(); }
-  else if (e.key === "ArrowUp") { acIndex = Math.max(acIndex - 1, 0); e.preventDefault(); }
-  else if (e.key === "Enter" && acIndex >= 0) { $("q").value = acItems[acIndex]; hideAc(); runSearch(); e.preventDefault(); return; }
+  if (e.key === "ArrowDown") acIndex = Math.min(acIndex + 1, items.length - 1);
+  else if (e.key === "ArrowUp") acIndex = Math.max(acIndex - 1, 0);
   else return;
+  e.preventDefault();
   items.forEach((el, i) => el.classList.toggle("active", i === acIndex));
-});
+  if (items[acIndex]) $("q").value = acItems[acIndex];
+}
 function hideAc() { $("ac").classList.remove("show"); acIndex = -1; }
 
-// ---------- поиск ----------
+// ---------------- search (grouped by service) ----------------
 async function runSearch() {
-  const params = new URLSearchParams();
+  const p = new URLSearchParams();
   const q = $("q").value.trim();
-  if (q) params.set("q", q);
-  if ($("f-city").value) params.set("city", $("f-city").value);
-  if ($("f-category").value) params.set("category", $("f-category").value);
-  if ($("f-pmin").value) params.set("price_min", $("f-pmin").value);
-  if ($("f-pmax").value) params.set("price_max", $("f-pmax").value);
-  params.set("sort", $("f-sort").value);
-  if ($("f-stale").checked) params.set("include_stale", "true");
+  if (q) p.set("q", q);
+  if ($("f-city").value) p.set("city", $("f-city").value);
+  if (activeCategory) p.set("category", activeCategory);
+  if ($("f-pmin").value) p.set("price_min", $("f-pmin").value);
+  if ($("f-pmax").value) p.set("price_max", $("f-pmax").value);
+  p.set("sort", $("f-sort").value);
+  if ($("f-stale").checked) p.set("include_stale", "true");
 
-  $("results").innerHTML = `<div class="loading">Загрузка…</div>`;
+  $("resultsTitle").textContent = q ? `Результаты: «${q}»` : (activeCategory ? cap(activeCategory) : "Популярные услуги");
+  $("results").innerHTML = `<div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div>`;
   try {
-    const data = await fetch(`${API}/search?${params}`).then((r) => r.json());
-    render(data.results);
-    $("count").textContent = data.count ? `найдено: ${data.count}` : "";
+    const data = await fetch(`${API}/services?${p}`).then((r) => r.json());
+    renderServices(data.results);
+    $("count").textContent = data.count ? `${data.count} услуг` : "";
   } catch (e) {
-    $("results").innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось загрузить данные.<br>Запущен ли backend?</div>`;
+    $("results").innerHTML = `<div class="empty"><div class="big">⚠️</div>Не удалось загрузить данные. Запущен ли сервер?</div>`;
   }
 }
 
-function render(rows) {
+function renderServices(rows) {
   if (!rows || !rows.length) {
-    $("results").innerHTML = `<div class="empty"><div class="big">🔍</div>Ничего не найдено.<br>Попробуйте изменить запрос или сбросить фильтры.</div>`;
+    $("results").innerHTML = `<div class="empty"><div class="big">🔍</div>Ничего не найдено.<br>Измените запрос или сбросьте фильтры.</div>`;
+    $("count").textContent = "";
     return;
   }
-  $("results").innerHTML = rows.map(card).join("");
-  $("results").querySelectorAll("[data-clinic]").forEach((el) => {
-    el.onclick = () => openClinic(el.dataset.clinic);
-  });
-  $("results").querySelectorAll(".cmp input").forEach((el) => {
-    el.onchange = () => toggleCompare(el, rows);
-  });
+  $("results").innerHTML = rows.map(svcCard).join("");
+  $("results").querySelectorAll(".svc-card").forEach((el) =>
+    (el.onclick = () => openService(el.dataset.id)));
 }
 
-function card(o) {
-  const badges = [`<span class="badge cat">${o.category || "—"}</span>`];
-  if (o.is_cheapest) badges.push(`<span class="badge best">★ лучшая цена</span>`);
-  if (o.is_stale) badges.push(`<span class="badge stale">устарело &gt;30 дн.</span>`);
-  const updated = o.updated_days_ago === 0 ? "сегодня"
-    : o.updated_days_ago === 1 ? "вчера"
-    : o.updated_days_ago != null ? `${o.updated_days_ago} дн. назад` : "—";
-  const meta = [
-    o.city ? `📍 ${o.city}${o.address ? ", " + o.address : ""}` : "",
-    o.working_hours ? `🕑 ${o.working_hours}` : "",
-    `🔄 обновлено ${updated}`,
-    o.source_url ? `<a href="${o.source_url}" target="_blank" rel="noopener">источник ↗</a>` : "",
-  ].filter(Boolean).join(" · ");
-
+function svcCard(s) {
+  const ic = catIcon(s.category);
+  const place = s.clinic_count + " " + plural(s.clinic_count, "клиника", "клиники", "клиник")
+    + (s.city_count > 1 ? ` · ${s.city_count} ${plural(s.city_count, "город", "города", "городов")}` : "");
   return `
-    <div class="card ${o.is_cheapest ? "cheapest" : ""}">
-      <div class="card-main">
-        <div class="svc">${o.service_name || o.service_name_raw}</div>
-        <div class="clinic"><button data-clinic="${encodeURIComponent(o.clinic_name)}">${o.clinic_name}</button></div>
-        <div class="meta">${meta}</div>
-        <div class="badges">${badges.join("")}</div>
+    <div class="svc-card" data-id="${s.service_id}">
+      <div class="svc-ic ${ic.cls}">${ic.ic}</div>
+      <div class="svc-body">
+        <div class="svc-name">${esc(s.canonical_name)}</div>
+        <div class="svc-meta">
+          <span class="svc-cat-badge">${esc(s.category || "услуга")}</span>
+          <span>🏥 ${place}</span>
+          ${s.turnaround ? `<span>⏱ ${esc(s.turnaround)}</span>` : ""}
+        </div>
       </div>
-      <div class="card-side">
-        <div class="price">${fmt(o.price_kzt)} <span>₸</span></div>
-        <label class="cmp"><input type="checkbox" data-id="${o.id}" ${compare.has(o.id) ? "checked" : ""}/> сравнить</label>
+      <div class="svc-price">
+        <div class="from">от</div>
+        <div class="val">${fmt(s.min_price)} <span>₸</span></div>
+        <div class="chev">Подробнее →</div>
       </div>
     </div>`;
 }
 
-// ---------- сравнение ----------
-function toggleCompare(el, rows) {
-  const id = +el.dataset.id;
-  if (el.checked) {
-    const o = rows.find((r) => r.id === id);
-    if (o) compare.set(id, o);
-  } else compare.delete(id);
-  updateCmpBar();
-}
-function updateCmpBar() {
-  $("cmpCount").textContent = `Выбрано: ${compare.size}`;
-  $("cmpBar").classList.toggle("show", compare.size > 0);
-}
-function clearCompare() {
-  compare.clear(); updateCmpBar();
-  document.querySelectorAll(".cmp input").forEach((el) => (el.checked = false));
-}
-function showCompare() {
-  const items = [...compare.values()];
-  const minPrice = Math.min(...items.map((o) => o.price_kzt));
-  const rows = items.map((o) => `
-    <tr class="${o.price_kzt === minPrice ? "min" : ""}">
-      <td>${o.clinic_name}</td>
-      <td>${o.service_name || o.service_name_raw}</td>
-      <td>${o.city || "—"}</td>
-      <td class="num">${fmt(o.price_kzt)} ₸</td>
-      <td>${o.updated_days_ago != null ? o.updated_days_ago + " дн." : "—"}</td>
-    </tr>`).join("");
-  openModal(`
-    <button class="modal-close" onclick="closeModal()">✕</button>
-    <h2>Сравнение предложений</h2>
-    <div class="sub">${items.length} предложений · зелёным выделена минимальная цена</div>
-    <table>
-      <thead><tr><th>Клиника</th><th>Услуга</th><th>Город</th><th>Цена</th><th>Обновлено</th></tr></thead>
-      <tbody>${rows}</tbody>
-    </table>`);
+// ---------------- service detail (всё на нашем сайте) ----------------
+async function openService(id) {
+  openModal(`<div class="loading">Загрузка…</div>`);
+  const p = new URLSearchParams();
+  if ($("f-city").value) p.set("city", $("f-city").value);
+  if ($("f-stale").checked) p.set("include_stale", "true");
+  try {
+    const d = await fetch(`${API}/service/${id}?${p}`).then((r) => r.json());
+    const ic = catIcon(d.category);
+    const tile = (k, v) => v && v !== "—" ? `<div class="info-tile"><div class="k">${k}</div><div class="v">${esc(v)}</div></div>` : "";
+    const clinics = d.offers.map(clinicRow).join("") ||
+      `<div class="empty" style="padding:30px">Пока нет актуальных предложений по этой услуге.</div>`;
+    openModal(`
+      <button class="modal-close" onclick="closeModal()">✕</button>
+      <div class="svc-detail-head">
+        <div class="cat">${ic.ic} ${esc(d.category || "услуга")}</div>
+        <h2>${esc(d.canonical_name)}</h2>
+        <div class="price-line">${d.clinic_count
+          ? `${d.clinic_count} ${plural(d.clinic_count, "клиника", "клиники", "клиник")} · цена <b>от ${fmt(d.min_price)} ₸</b> до ${fmt(d.max_price)} ₸`
+          : "нет актуальных предложений"}</div>
+      </div>
+      <div class="info-grid">
+        ${tile("Биоматериал", d.biomaterial)}
+        ${tile("Подготовка", d.preparation)}
+        ${tile("Срок выполнения", d.turnaround)}
+      </div>
+      ${d.description ? `<div class="svc-desc">${esc(d.description)}</div>` : ""}
+      <div class="clinics-head"><span>Где сдать дешевле</span><span class="hint">отсортировано по цене · зелёным — минимальная</span></div>
+      <div class="clinic-list">${clinics}</div>
+    `);
+    $("modal").querySelectorAll("[data-clinic]").forEach((el) =>
+      (el.onclick = () => openClinic(el.dataset.clinic)));
+  } catch (e) {
+    openModal(`<button class="modal-close" onclick="closeModal()">✕</button><div class="empty">Не удалось загрузить услугу.</div>`);
+  }
 }
 
-// ---------- карточка клиники ----------
+function clinicRow(o) {
+  const upd = o.updated_days_ago === 0 ? "сегодня" : o.updated_days_ago === 1 ? "вчера"
+    : o.updated_days_ago != null ? `${o.updated_days_ago} дн. назад` : "—";
+  const tags = (o.is_cheapest ? `<span class="tag best">лучшая цена</span> ` : "")
+    + (o.is_stale ? `<span class="tag stale">устарело</span>` : "");
+  const meta = [
+    o.city ? `📍 ${esc(o.city)}${o.address ? ", " + esc(o.address) : ""}` : "",
+    o.working_hours ? `🕑 ${esc(o.working_hours)}` : "",
+    `🔄 ${upd}`,
+  ].filter(Boolean).join(" · ");
+  return `
+    <div class="clinic-row ${o.is_cheapest ? "best" : ""}">
+      <div>
+        <div class="cl-name"><button data-clinic="${encodeURIComponent(o.clinic_name)}">${esc(o.clinic_name)}</button> ${tags}</div>
+        <div class="cl-meta">${meta}</div>
+      </div>
+      <div class="cl-price"><div class="p">${fmt(o.price_kzt)} <span>₸</span></div></div>
+    </div>`;
+}
+
+// ---------------- clinic card ----------------
 async function openClinic(encoded) {
   const name = decodeURIComponent(encoded);
   openModal(`<div class="loading">Загрузка…</div>`);
   try {
     const c = await fetch(`${API}/clinic/${encodeURIComponent(name)}`).then((r) => r.json());
     const rows = c.services.map((s) => `
-      <tr>
-        <td>${s.service_name || s.service_name_raw}</td>
-        <td>${s.category || "—"}</td>
-        <td class="num">${fmt(s.price_kzt)} ₸</td>
-      </tr>`).join("");
+      <tr><td>${esc(s.service_name || s.service_name_raw)}</td><td>${esc(s.category || "—")}</td>
+      <td class="num">${fmt(s.price_kzt)} ₸</td></tr>`).join("");
     openModal(`
       <button class="modal-close" onclick="closeModal()">✕</button>
-      <h2>${c.clinic_name}</h2>
-      <div class="sub">
-        ${c.city ? "📍 " + c.city : ""}${c.address ? ", " + c.address : ""}
-        ${c.phone ? " · ☎ " + c.phone : ""}${c.working_hours ? " · 🕑 " + c.working_hours : ""}
+      <div class="clinic-modal-head">
+        <h2>${esc(c.clinic_name)}</h2>
+        <div class="sub">${[c.city ? "📍 " + esc(c.city) + (c.address ? ", " + esc(c.address) : "") : "",
+          c.phone ? "☎ " + esc(c.phone) : "", c.working_hours ? "🕑 " + esc(c.working_hours) : ""].filter(Boolean).join(" · ")}</div>
       </div>
-      <table>
-        <thead><tr><th>Услуга</th><th>Категория</th><th>Цена</th></tr></thead>
-        <tbody>${rows}</tbody>
-      </table>`);
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>Услуга</th><th>Категория</th><th style="text-align:right">Цена</th></tr></thead>
+        <tbody>${rows}</tbody></table></div>`);
   } catch (e) {
-    openModal(`<button class="modal-close" onclick="closeModal()">✕</button><div class="empty">Не удалось загрузить карточку клиники.</div>`);
+    openModal(`<button class="modal-close" onclick="closeModal()">✕</button><div class="empty">Не удалось загрузить клинику.</div>`);
   }
 }
 
-// ---------- админ: запуск парсинга ----------
-async function triggerParse() {
-  const btn = $("parseBtn");
-  btn.disabled = true;
-  const prev = btn.textContent;
-  btn.textContent = "⟳ Парсинг запущен…";
-  $("adminMsg").textContent = "Выполняется parse → normalize, это может занять до минуты…";
+// ---------------- обновление данных ----------------
+async function refreshData() {
+  const btn = $("parseBtn"), prev = btn.textContent;
+  btn.disabled = true; btn.textContent = "↻ Обновляем…";
+  $("adminMsg").textContent = "Проверяем источники и подтягиваем свежие цены… (до минуты)";
   try {
     const res = await fetch(`${API}/admin/trigger-parse`, { method: "POST" }).then((r) => r.json());
-    let msg = `Готово: ${res.status}\nНовых записей: ${res.new_records}`;
-    if (res.errors && res.errors.length) msg += `\nОшибки/предупреждения:\n• ` + res.errors.slice(0, 5).join("\n• ");
+    let msg = res.new_records > 0
+      ? `Готово. Добавлено свежих цен: ${res.new_records}.`
+      : "Готово. Новых цен нет — данные уже актуальны.";
+    if (res.errors && res.errors.length) msg += `\nНедоступные источники: ${res.errors.length} (пропущены).`;
     $("adminMsg").textContent = msg;
     await loadStats();
     runSearch();
   } catch (e) {
-    $("adminMsg").textContent = "Ошибка вызова /admin/trigger-parse.";
+    $("adminMsg").textContent = "Не удалось обновить данные.";
   } finally {
-    btn.disabled = false;
-    btn.textContent = prev;
+    btn.disabled = false; btn.textContent = prev;
   }
 }
 
-// ---------- утилиты ----------
+// ---------------- utils ----------------
 function resetFilters() {
-  $("q").value = ""; $("f-city").value = ""; $("f-category").value = "";
-  $("f-pmin").value = ""; $("f-pmax").value = ""; $("f-sort").value = "price_asc";
-  $("f-stale").checked = false;
-  runSearch();
+  $("q").value = ""; $("f-city").value = ""; $("f-pmin").value = ""; $("f-pmax").value = "";
+  $("f-sort").value = "price_asc"; $("f-stale").checked = false; activeCategory = ""; buildChips(); runSearch();
 }
-function openModal(html) { $("modal").innerHTML = html; $("modalBack").classList.add("show"); }
-function closeModal() { $("modalBack").classList.remove("show"); }
+function openModal(html) { $("modal").innerHTML = html; $("modalBack").classList.add("show"); document.body.style.overflow = "hidden"; }
+function closeModal() { $("modalBack").classList.remove("show"); document.body.style.overflow = ""; }
 function debounce(fn, ms) { let t; return (...a) => { clearTimeout(t); t = setTimeout(() => fn(...a), ms); }; }
-
+function cap(s) { return s.charAt(0).toUpperCase() + s.slice(1); }
+function plural(n, one, few, many) {
+  const m10 = n % 10, m100 = n % 100;
+  if (m10 === 1 && m100 !== 11) return one;
+  if (m10 >= 2 && m10 <= 4 && (m100 < 10 || m100 >= 20)) return few;
+  return many;
+}
 window.closeModal = closeModal;
 init();

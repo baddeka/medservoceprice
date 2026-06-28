@@ -187,6 +187,133 @@ def search(
 
 
 # --------------------------------------------------------------------------
+# GET /services — сгруппированная выдача по услугам (стиль i-teka):
+# одна карточка = одна услуга с «от N ₸», числом клиник и городов.
+# --------------------------------------------------------------------------
+@app.get("/services")
+def services(
+    q: str = Query(""),
+    city: str = Query(""),
+    category: str = Query(""),
+    price_min: int = Query(0, ge=0),
+    price_max: int = Query(0, ge=0),
+    sort: str = Query("price_asc", description="price_asc | price_desc | popular | name"),
+    include_stale: bool = Query(False),
+    limit: int = Query(200, ge=1, le=1000),
+):
+    conn = get_connection()
+    sql = """
+        SELECT sd.id AS service_id, sd.canonical_name, sd.category, sd.turnaround,
+               MIN(l.price_kzt) AS min_price, MAX(l.price_kzt) AS max_price,
+               COUNT(DISTINCT l.clinic_name) AS clinic_count,
+               COUNT(DISTINCT l.city) AS city_count,
+               GROUP_CONCAT(DISTINCT l.city) AS cities
+        FROM listings l
+        JOIN service_dictionary sd ON sd.id = l.service_id
+        WHERE 1=1
+    """
+    params = []
+    if q:
+        sql += " AND (sd.canonical_name LIKE ? OR sd.synonyms LIKE ? OR l.service_name_raw LIKE ?)"
+        like = f"%{q}%"; params += [like, like, like]
+    if city:
+        sql += " AND l.city = ?"; params.append(city)
+    if category:
+        sql += " AND l.category = ?"; params.append(category)
+    if price_min:
+        sql += " AND l.price_kzt >= ?"; params.append(price_min)
+    if price_max:
+        sql += " AND l.price_kzt <= ?"; params.append(price_max)
+    if not include_stale:
+        cutoff = (datetime.now() - timedelta(days=STALE_DAYS)).isoformat()
+        sql += " AND l.parsed_at >= ?"; params.append(cutoff)
+
+    sql += " GROUP BY sd.id"
+    order = {
+        "price_asc": "min_price ASC",
+        "price_desc": "min_price DESC",
+        "popular": "clinic_count DESC, min_price ASC",
+        "name": "sd.canonical_name ASC",
+    }.get(sort, "min_price ASC")
+    sql += f" ORDER BY {order} LIMIT ?"; params.append(limit)
+
+    rows = conn.execute(sql, params).fetchall()
+    conn.close()
+    items = []
+    for r in rows:
+        cities = sorted(set((r["cities"] or "").split(","))) if r["cities"] else []
+        items.append({
+            "service_id": r["service_id"],
+            "canonical_name": r["canonical_name"],
+            "category": r["category"],
+            "turnaround": r["turnaround"],
+            "min_price": r["min_price"],
+            "max_price": r["max_price"],
+            "clinic_count": r["clinic_count"],
+            "city_count": r["city_count"],
+            "cities": cities,
+        })
+    return {"count": len(items), "results": items}
+
+
+# --------------------------------------------------------------------------
+# GET /service/{service_id} — детальная карточка услуги (вся инфа на нашем
+# сайте): описание, подготовка, биоматериал, срок + список клиник с ценами.
+# --------------------------------------------------------------------------
+@app.get("/service/{service_id}")
+def service_detail(
+    service_id: int,
+    city: str = Query(""),
+    include_stale: bool = Query(False),
+    sort: str = Query("price_asc"),
+):
+    conn = get_connection()
+    info = conn.execute(
+        "SELECT * FROM service_dictionary WHERE id = ?", (service_id,)
+    ).fetchone()
+    if not info:
+        conn.close()
+        return JSONResponse(status_code=404, content={"detail": "услуга не найдена"})
+
+    sql = """
+        SELECT l.*, sd.canonical_name AS service_name_norm
+        FROM listings l LEFT JOIN service_dictionary sd ON sd.id = l.service_id
+        WHERE l.service_id = ?
+    """
+    params = [service_id]
+    if city:
+        sql += " AND l.city = ?"; params.append(city)
+    if not include_stale:
+        cutoff = (datetime.now() - timedelta(days=STALE_DAYS)).isoformat()
+        sql += " AND l.parsed_at >= ?"; params.append(cutoff)
+    order = {"price_asc": "l.price_kzt ASC", "price_desc": "l.price_kzt DESC",
+             "date_desc": "l.parsed_at DESC"}.get(sort, "l.price_kzt ASC")
+    sql += f" ORDER BY {order}"
+
+    offers = [_row_to_offer(r) for r in conn.execute(sql, params).fetchall()]
+    conn.close()
+    if offers:
+        cheapest = min(o["price_kzt"] for o in offers if o["price_kzt"] is not None)
+        for o in offers:
+            o["is_cheapest"] = (o["price_kzt"] == cheapest)
+
+    prices = [o["price_kzt"] for o in offers if o["price_kzt"] is not None]
+    return {
+        "service_id": info["id"],
+        "canonical_name": info["canonical_name"],
+        "category": info["category"],
+        "description": info["description"],
+        "preparation": info["preparation"],
+        "biomaterial": info["biomaterial"],
+        "turnaround": info["turnaround"],
+        "min_price": min(prices) if prices else None,
+        "max_price": max(prices) if prices else None,
+        "clinic_count": len(offers),
+        "offers": offers,
+    }
+
+
+# --------------------------------------------------------------------------
 # GET /services/autocomplete — автодополнение (контракт)
 # --------------------------------------------------------------------------
 @app.get("/services/autocomplete")
